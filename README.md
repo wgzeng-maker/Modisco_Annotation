@@ -1,3 +1,22 @@
+# Modisco_ClusterAnalysis
+
+A downstream analysis pipeline built on Jacob Schreiber's [Modisco-lite](https://github.com/jmschrei/tfmodisco-lite).
+
+Modisco-lite groups seqlets into clusters (called **Patterns**) and matches each one to a known motif from the public motif database JASPAR. It also splits each Pattern into sub-clusters (called **Subpatterns**). This repository analyzes and visualizes the heterogeneity within these Patterns and Subpatterns.
+
+## Visualizing the clusters
+
+Each point is one seqlet. Seqlets are embedded by similarity, so points that sit close together are alike.
+
+**UMAP of all Patterns** — different motifs form separate islands:
+
+<img width="1950" height="1650" alt="all_patterns_seqlet_umap" src="https://github.com/user-attachments/assets/9f1141e5-e951-42fb-9bfd-ba17eb70b737" />
+
+**UMAP of the Subpatterns inside one Pattern** — reveals the finer structure Modisco found within a single cluster:
+
+<img width="1500" height="1350" alt="pattern0_seqlet_umap" src="https://github.com/user-attachments/assets/9a4785c6-9254-430c-86cc-feffccdec3df" />
+
+
 ## What drives heterogeneity within a Pattern?
 
 A Pattern can vary in two independent ways: its **sequence** (which bases are
