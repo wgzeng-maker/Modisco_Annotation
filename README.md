@@ -78,57 +78,66 @@ four regions.
 ## Limitation: most identified seqlets never enter clustering
 
 A key limitation worth understanding before interpreting any MoDISco pattern set
-— **the patterns are built from only a small fraction of the seqlets MoDISco
-actually identifies.**
+— **the patterns are built from only a fraction of the seqlets MoDISco actually
+identifies.**
 
 ### What happens
 
 MoDISco runs in stages, and seqlets are lost at each one:
 
-1. **Seqlet identification** scans every position and flags windows whose
-   importance passes a (deliberately lenient) FDR threshold.
+1. **Seqlet identification** scans every position in the motif-discovery window
+   and flags windows whose importance passes a (deliberately lenient) FDR
+   threshold (`target_fdr=0.2` by default).
 2. **Metacluster cap** — each metacluster is capped at `max_seqlets_per_metacluster`
-   (default **20,000**). Only the *strongest-attribution* seqlets enter
-   clustering; the rest are discarded before clustering even begins.
+   (the `-n` flag; library default **20,000**). Only the *strongest-attribution*
+   seqlets enter clustering; the rest are discarded before clustering begins.
 3. **Clustering** drops more (noise filtering, clusters too small to survive).
 
-This cap is not mentioned in the MoDISco README or technical note — it exists
-only as a default in the function signature. It is a reasonable engineering
-choice (clustering millions of seqlets is infeasible) and it keeps the
-*strongest* seqlets, not random ones. But a user reading the documentation would
-not know that most of their signal was set aside.
+The cap is not discussed in the MoDISco README or technical note — it exists
+only as a settable parameter. It is a reasonable engineering choice (clustering
+millions of seqlets is infeasible) and it keeps the *strongest* seqlets, not
+random ones. But a user reading the documentation would not know that most of
+their signal was set aside.
 
 ### Concrete numbers from one run
 
 A ChromBPNet profile-head model on mouse cerebellar granule cells
-(158,710 peak regions):
+(158,710 peak regions), run with `-w 1000 -n 100000`:
 
 | Stage | Seqlets | Note |
 |---|---|---|
-| Candidate seqlets identified | ~3,635,000 | ~23 per 2 kb region |
-| Survived pos/neg threshold | ~3,578,000 | threshold drops only ~1.5% |
-| **Assigned to final patterns** | **62,767** | **~1.7% of candidates** |
+| Candidate seqlets identified | 478,887 | ~3.0 per 1 kb window |
+| Survived pos/neg threshold | 478,887 | threshold dropped **0** here |
+| **Assigned to final patterns** | **62,767** | **~13% of candidates** |
 
-The vast majority of the drop is **not** the importance threshold — it is the
-20,000-per-metacluster cap. ~98% of identified seqlets pass the threshold, but
-only the top 20,000 per sign enter clustering.
+In this run the importance threshold removed nothing — every candidate was
+confidently positive or negative. The entire gap from 478,887 down to 62,767 is
+the **100,000-per-metacluster cap plus clustering**: there were 418,064 positive
+candidates, but only the top 100,000 by strength entered clustering, and
+clustering reduced those further.
+
+> Note: the candidate count is sensitive to the `-w` (window) parameter. This
+> run used `-w 1000`, so extraction scanned only the central 1 kb of each 2114 bp
+> input. Counting on the full 2114 bp window instead gives ~3.6M candidates — an
+> over-count that does not reflect what the real run saw. Always match `-w`.
 
 ### Why this matters
 
-The ~23 candidate seqlets per region are mostly weak-importance windows, not
-strong motif instances, so much of what is dropped is genuinely low-signal.
-**But not all of it.** Among the millions of sub-threshold-strength seqlets there
-are very likely *real but weaker* regulatory elements — rarer motifs, weaker
-binding sites, cell-type-specific grammar with modest attribution — that are
-discarded simply for not being in the top 20,000 by strength.
+The ~3 candidate seqlets per region are a mix of real motif instances and
+weaker-importance windows. Much of what is dropped past the cap is genuinely
+lower-signal — **but not all of it.** Among the hundreds of thousands of
+sub-cap-strength seqlets there are very likely *real but weaker* regulatory
+elements — rarer motifs, weaker binding sites, cell-type-specific grammar with
+modest attribution — discarded simply for not being in the top 100,000 by
+strength.
 
 In other words: **MoDISco patterns describe the strongest, most common motifs
-well, but say nothing about the long tail of weaker signal.**
+well, but say little about the long tail of weaker signal.**
 
 ### Future direction
 
-A robust method is needed to analyze the left-over seqlets — the ones that pass
-the importance threshold but never enter clustering. Possible directions:
+A robust method is needed to analyze the left-over seqlets — those that pass the
+importance threshold but never enter clustering. Possible directions:
 
 - cluster the discarded seqlets separately, in batches, rather than capping;
 - match weak seqlets against the *strong* patterns already found, to rescue weak
@@ -139,6 +148,5 @@ Until then, any biological claim from a MoDISco run should be read as a statemen
 about the **dominant** motifs, explicitly not about the full set of important
 sequence in the genome.
 
-*(The script `count_leftover_seqlets.py` in this repo reproduces the funnel
-numbers above for any modisco-lite run.)*
-
+*(The script `count_leftover_seqlets.py` reproduces this funnel for any
+modisco-lite run — pass the matching `--window`.)*
