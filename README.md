@@ -121,6 +121,55 @@ clustering reduced those further.
 > input. Counting on the full 2114 bp window instead gives ~3.6M candidates — an
 > over-count that does not reflect what the real run saw. Always match `-w`.
 
+## The complete seqlet funnel
+
+MoDISco discards seqlets at every stage. Here is the full accounting for one
+ChromBPNet profile-head run (mouse cerebellar granule cells, 158,710 peaks,
+`-w 1000 -n 100000`):
+
+| Stage | Seqlets | What happens |
+|---|---|---|
+| Candidates identified | 478,887 | windows passing the lenient FDR (~3 per 1 kb region) |
+| Survived pos/neg threshold | 478,887 | split by sign; here the threshold dropped **0** |
+| → positive metacluster | 418,064 | |
+| → negative metacluster | 60,823 | |
+| Entered clustering | ~160,823 | top **100,000** positive (cap) + all 60,823 negative |
+| **Assigned to final patterns** | **62,767** | survived clustering into 53 patterns |
+
+### Where seqlets are lost
+
+Two separate bottlenecks, often confused:
+
+**1. The metacluster cap (the largest loss).**
+Each metacluster is capped at `-n` (here 100,000). The positive metacluster had
+418,064 seqlets but only the **top 100,000 by attribution strength** entered
+clustering — the other ~318,000 were discarded before clustering began. The
+negative metacluster (60,823) was under the cap, so all of it entered.
+
+**2. Clustering-stage quality filters (~98,000 dropped).**
+Of the ~160,823 seqlets that entered clustering, only 62,767 survived. The
+~98,000 difference is removed by three quality filters inside MoDISco:
+
+- **noise filtering** — seqlets whose coarse and fine similarity disagree
+  (look like noise, no consistent neighbors) are discarded;
+- **small-cluster disbanding** — clusters below the minimum size are broken up,
+  and their seqlets dropped unless similar enough to a surviving pattern;
+- **low-information-content filtering** — whole patterns with too little
+  sequence information are removed.
+
+These three are *quality* filters — the seqlets entered clustering but never
+formed or joined a clean motif. Their individual counts are **not saved** by
+MoDISco, so only the combined ~98,000 is measurable; the per-cause breakdown
+would require re-running clustering with added logging.
+
+### Bottom line
+
+Of 478,887 confidently-important candidate seqlets, only 62,767 (~13%) end up in
+final patterns. The loss is dominated by the metacluster cap (a tractability
+limit, not a biological one) and clustering-stage quality filters. **MoDISco
+patterns therefore describe the strongest, cleanest, most common motifs — not
+the full set of important sequence in the genome.**
+
 ### Why this matters
 
 The ~3 candidate seqlets per region are a mix of real motif instances and
