@@ -4,6 +4,38 @@ A downstream analysis pipeline built on Jacob Schreiber's [Modisco-lite](https:/
 
 Modisco-lite groups seqlets into clusters (called **Patterns**) and matches each one to a known motif from the public motif database JASPAR. It also splits each Pattern into sub-clusters (called **Subpatterns**). This repository analyzes and visualizes the heterogeneity within these Patterns and Subpatterns.
 
+## Current development status
+
+This repository is still in research-toolkit form. The first tested command is
+the back-annotation script, which maps clustered MoDISco seqlets back to genome
+coordinates:
+
+```bash
+python build_seqlet_annotation.py \
+  --modisco GC_modisco_profile_v2.h5 \
+  --bed GC_mm10.interpreted_regions.bed \
+  --output GC_profile_seqlet_annotation \
+  --window 1000 \
+  --input-len 2114 \
+  --genome mm10.fa
+```
+
+Coordinates are BED-style: 0-based, half-open intervals. When `--genome` is
+provided, the script samples seqlets across patterns/subpatterns/strands and
+checks the stored seqlet sequence against the reference FASTA before writing the
+annotation table.
+
+For local development:
+
+```bash
+python -m pip install -r requirements-dev.txt
+python -m pytest
+```
+
+`hdf5plugin` is required for many production MoDISco HDF5 files because they may
+use compressed HDF5 filters. The small synthetic tests do not require compressed
+HDF5.
+
 ## Visualizing the clusters
 
 Each point is one seqlet. Seqlets are embedded by similarity, so points that sit close together are alike.
