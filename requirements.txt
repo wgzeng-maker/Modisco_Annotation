@@ -1,5 +1,7 @@
+beautifulsoup4
 h5py
 hdf5plugin
+logomaker
 matplotlib
 numpy
 pandas

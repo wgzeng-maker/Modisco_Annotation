@@ -100,6 +100,59 @@ The UMAP visualizations use a pairwise Continuous Jaccard matrix, so memory and
 time scale as O(N²). Reduce `--max-seqlets` or `--per-pattern-cap` before
 running large plots locally.
 
+### Upgraded MoDISco report PDF
+
+The original MoDISco HTML report can reference images by relative paths, so
+images may disappear if the HTML is moved away from its report image directory.
+Generate a standalone PDF while the HTML is still next to its image files:
+
+```bash
+python upgrade_modisco_report.py \
+  --report profile_report/motifs.html \
+  --h5 GC_modisco_profile_v2.h5 \
+  --meme JASPAR2024_CORE_non-redundant_pfms_meme.txt \
+  --out-pdf motifs_upgraded.pdf
+```
+
+The PDF embeds the original report images that can be resolved from the HTML,
+plus regenerated forward/reverse PFM logos from the MoDISco H5 file.
+
+To also write self-contained HTML with base64-embedded images:
+
+```bash
+python upgrade_modisco_report.py \
+  --report profile_report/motifs.html \
+  --h5 GC_modisco_profile_v2.h5 \
+  --meme JASPAR2024_CORE_non-redundant_pfms_meme.txt \
+  --out-html motifs_upgraded.html \
+  --embed-html-images
+```
+
+### GCP back-annotation test
+
+On the GCP VM, run back-annotation with the exact files used for the MoDISco
+run. The key check is that `--genome` verification passes before outputs are
+trusted:
+
+```bash
+cd /home/jupyter/GC_chrombpnet/GC_contribs
+
+python /path/to/Modisco_Annotation/build_seqlet_annotation.py \
+  --modisco GC_modisco_profile_v2.h5 \
+  --bed GC_mm10.interpreted_regions.bed \
+  --output GC_profile_seqlet_annotation \
+  --window 1000 \
+  --input-len 2114 \
+  --genome /home/jupyter/GC_chrombpnet/data/downloads/mm10.fa
+```
+
+Expected behavior:
+
+- the script reports `MATCH=True` for sampled FASTA checks;
+- it writes `GC_profile_seqlet_annotation.bed`;
+- it writes `GC_profile_seqlet_annotation.csv`;
+- the annotated seqlet count should match the final clustered seqlet total.
+
 ## Visualizing the clusters
 
 Each point is one seqlet. Seqlets are embedded by similarity, so points that sit close together are alike.
