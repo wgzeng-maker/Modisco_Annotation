@@ -1,4 +1,4 @@
-"""
+r"""
 seqlet_viz.py
 =============
 Visualization toolkit for TF-MoDISco seqlets from ChromBPNet models.
@@ -52,6 +52,7 @@ Requirements
 
 import argparse
 from contextlib import contextmanager
+
 
 @contextmanager
 def open_h5(path):
