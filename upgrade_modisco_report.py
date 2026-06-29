@@ -173,12 +173,19 @@ def parse_report(report_path):
                 value = cells[idx].get_text(strip=True)
                 if value and value.lower() != "nan":
                     match_ids.append(value)
+        image_records = []
+        for cell_idx, cell in enumerate(cells):
+            header = headers[cell_idx] if cell_idx < len(headers) else ""
+            for img in cell.find_all("img"):
+                if img.get("src"):
+                    image_records.append({"src": img["src"], "header": header})
+
         rows.append({
             "key": key,
             "cells": cells,
             "tr": tr,
             "match_ids": match_ids,
-            "image_srcs": [img.get("src") for img in tr.find_all("img") if img.get("src")],
+            "image_records": image_records,
         })
 
     return {
@@ -270,18 +277,41 @@ def resolve_image_bytes(src, report_path):
     parsed = urlparse(src)
     if parsed.scheme in {"http", "https"}:
         return None, "remote image URL not embedded automatically"
-    if parsed.scheme == "file":
-        candidate = Path(unquote(parsed.path))
-    else:
-        clean = unquote(parsed.path)
-        candidate = (Path(report_path).parent / clean).resolve()
+    clean = unquote(parsed.path)
+    source_path = Path(clean)
+    report_dir = Path(report_path).resolve().parent
+    primary = source_path if source_path.is_absolute() else report_dir / source_path
+    candidates = [primary]
 
-    if not candidate.exists():
-        return None, f"missing image file: {candidate}"
-    try:
-        return candidate.read_bytes(), None
-    except OSError as exc:
-        return None, f"could not read image file {candidate}: {exc}"
+    # Reports created inside a container often retain absolute /work/... paths
+    # after being moved to a VM directory. Rebase the stable profile_report
+    # suffix to the current HTML location before declaring the image missing.
+    if source_path.is_absolute():
+        candidates.append(report_dir / source_path.name)
+        parts = source_path.parts
+        if "profile_report" in parts:
+            marker_idx = parts.index("profile_report")
+            suffix = Path(*parts[marker_idx + 1:])
+            candidates.extend([
+                report_dir / suffix,
+                report_dir / "profile_report" / suffix,
+            ])
+            for parent in list(report_dir.parents)[:3]:
+                candidates.append(parent / "profile_report" / suffix)
+
+    checked = []
+    for candidate in candidates:
+        candidate = candidate.resolve()
+        if candidate in checked:
+            continue
+        checked.append(candidate)
+        if not candidate.exists():
+            continue
+        try:
+            return candidate.read_bytes(), None
+        except OSError as exc:
+            return None, f"could not read image file {candidate}: {exc}"
+    return None, f"missing image file: {primary} (checked {len(checked)} locations)"
 
 
 def image_array_from_bytes(image_bytes):
@@ -386,7 +416,39 @@ def draw_image_panel(fig, rect, image_bytes, title, missing_text=None):
         ax.text(0.5, 0.5, "image format unreadable",
                 ha="center", va="center", fontsize=8, wrap=True)
         return
+    # Matplotlib's PDF backend and different PDF viewers do not always composite
+    # transparent PNGs consistently. Flatten RGBA images onto white before they
+    # enter the PDF so motif logos have a stable background everywhere.
+    if getattr(arr, "ndim", 0) == 3 and arr.shape[2] == 4:
+        import numpy as np
+
+        rgb = arr[..., :3]
+        alpha = arr[..., 3:4]
+        if np.issubdtype(arr.dtype, np.integer):
+            rgb = rgb.astype(np.float32) / np.iinfo(arr.dtype).max
+            alpha = alpha.astype(np.float32) / np.iinfo(arr.dtype).max
+        arr = rgb * alpha + (1.0 - alpha)
     ax.imshow(arr)
+
+
+def available_original_images(row, report_path, limit):
+    """Return resolvable pre-upgrade report images and compact warnings.
+
+    An already-upgraded HTML contains our generated PFM columns as data URIs.
+    They are excluded here because the PDF adds fresh PFM logos separately.
+    """
+    available = []
+    warnings = []
+    for record in row["image_records"]:
+        if record["header"] in ADDED_HEADERS:
+            continue
+        image_bytes, warning = resolve_image_bytes(record["src"], report_path)
+        if image_bytes is not None:
+            if len(available) < limit:
+                available.append((image_bytes, record["header"] or "Original report image"))
+        elif warning:
+            warnings.append(warning)
+    return available, warnings
 
 
 def write_pdf(report, summaries, out_pdf, max_original_images=4, max_pages=None):
@@ -407,7 +469,7 @@ def write_pdf(report, summaries, out_pdf, max_original_images=4, max_pages=None)
             fig.patch.set_facecolor("white")
 
             tf_text = ", ".join(
-                f"{motif_id} → {tf_name}"
+                f"{motif_id} -> {tf_name}"
                 for motif_id, tf_name in summary["tf_matches"]
             ) or "No motif matches parsed"
             header = (
@@ -419,30 +481,42 @@ def write_pdf(report, summaries, out_pdf, max_original_images=4, max_pages=None)
                 header += f"\nAnnotation: {summary['annotation']}"
             fig.text(0.05, 0.95, header, ha="left", va="top", fontsize=11)
 
-            slots = [
-                (0.05, 0.58, 0.42, 0.25),
-                (0.53, 0.58, 0.42, 0.25),
-                (0.05, 0.28, 0.42, 0.25),
-                (0.53, 0.28, 0.42, 0.25),
-                (0.05, 0.05, 0.42, 0.16),
-                (0.53, 0.05, 0.42, 0.16),
-            ]
+            originals, row_warnings = available_original_images(
+                row, report["report_path"], max(0, min(max_original_images, 4))
+            )
+            warnings.extend(f"{summary['key']}: {warning}" for warning in row_warnings)
 
-            original_srcs = row["image_srcs"][:max_original_images]
-            for idx, src in enumerate(original_srcs[:4]):
-                image_bytes, warning = resolve_image_bytes(src, report["report_path"])
-                if warning:
-                    warnings.append(f"{summary['key']}: {warning}")
-                draw_image_panel(
-                    fig, slots[idx], image_bytes,
-                    title=f"Original report image {idx + 1}",
-                    missing_text=warning,
+            if originals:
+                original_slots = [
+                    (0.05, 0.57, 0.42, 0.23),
+                    (0.53, 0.57, 0.42, 0.23),
+                    (0.05, 0.31, 0.42, 0.20),
+                    (0.53, 0.31, 0.42, 0.20),
+                ]
+                for idx, (image_bytes, column_name) in enumerate(originals):
+                    title = column_name or f"Original report image {idx + 1}"
+                    draw_image_panel(fig, original_slots[idx], image_bytes, title=title)
+                pfm_slots = [
+                    (0.05, 0.05, 0.42, 0.17),
+                    (0.53, 0.05, 0.42, 0.17),
+                ]
+            else:
+                source_count = len(row_warnings)
+                fig.text(
+                    0.05, 0.80,
+                    f"Original report images unavailable ({source_count}). "
+                    "Run this command where the HTML image paths exist to embed them.",
+                    ha="left", va="top", fontsize=9, color="#8a3b12",
                 )
+                pfm_slots = [
+                    (0.07, 0.25, 0.40, 0.35),
+                    (0.53, 0.25, 0.40, 0.35),
+                ]
 
-            draw_image_panel(fig, slots[4], summary["fwd_png"], "PFM forward")
-            draw_image_panel(fig, slots[5], summary["rev_png"], "PFM reverse")
+            draw_image_panel(fig, pfm_slots[0], summary["fwd_png"], "PFM forward")
+            draw_image_panel(fig, pfm_slots[1], summary["rev_png"], "PFM reverse")
 
-            pdf.savefig(fig, bbox_inches="tight")
+            pdf.savefig(fig, facecolor="white")
             plt.close(fig)
 
     print(f"[done] wrote PDF: {out_pdf}")
