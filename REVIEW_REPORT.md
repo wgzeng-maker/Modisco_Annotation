@@ -1,10 +1,12 @@
-# Review report: first back-annotation milestone
+# Review report: back-annotation, seqlet counting, and visualization
 
 ## Scope
 
-This pass focuses on `build_seqlet_annotation.py`, because the genome
+The first pass focused on `build_seqlet_annotation.py`, because the genome
 back-annotation table is the foundation for downstream co-occurrence, overlap,
-and cross-dataset analyses.
+and cross-dataset analyses. This follow-up also reviewed the notebooks that
+produced the README plots/counts and wrapped the seqlet-counting and
+visualization code into reusable command-line scripts.
 
 ## Findings addressed
 
@@ -24,21 +26,31 @@ and cross-dataset analyses.
    - BED-style coordinate reconstruction;
    - subpattern count validation;
    - FASTA verification for forward and reverse-complement seqlets.
+5. `seqlet_viz.py` now has a real CLI with `atlas`, `subpattern`, `design1`,
+   and `design2` commands. Hard-coded notebook paths were removed.
+6. Visualization defaults are more laptop-safe: the all-pattern atlas now uses a
+   lower per-pattern cap, similarity matrices are float32, and the script
+   refuses very large O(N²) pairwise matrices unless explicitly overridden.
+7. `count_leftover_seqlets.py` now distinguishes measured quantities from the
+   estimated metacluster-cap input. It reports candidate seqlets, pos/neg
+   threshold survivors, optional estimated clustering entrants after `-n`, and
+   final pattern-assigned seqlets.
+8. The README and requirements now mention visualization dependencies and the
+   special `modiscolite` runtime requirement for the counting script.
+9. Heavy dependencies in the visualization/counting scripts are loaded lazily,
+   so `--help` works even before the scientific Python environment is installed.
 
 ## Remaining review findings
 
 These are intentionally left for later milestones:
 
-- Package the scripts into a real CLI with subcommands.
-- Make `seqlet_viz.py` laptop-safe by reducing default caps, documenting O(N²)
-  memory, and avoiding unnecessary full-dataset reads.
+- Package the scripts into an installable Python package with a top-level CLI.
 - Make `upgrade_modisco_report` idempotent and rename the file without the
   upload suffix.
-- Clarify `count_leftover_seqlets.py` documentation around the
-  `max_seqlets_per_metacluster` cap; the current logic counts candidates and
-  threshold survivors, not full clustering entrants.
 - Add a fixture that proves subpattern seqlet identity-level partitioning, not
   only count-level partitioning.
+- Add integration tests for `seqlet_viz.py` once a small HDF5 fixture and the
+  visualization dependencies are available in the test environment.
 
 ## Development notes
 
@@ -57,8 +69,22 @@ python -m pytest
 In this Codex session, syntax validation passed:
 
 ```bash
-python3 -m py_compile build_seqlet_annotation.py tests/test_build_seqlet_annotation.py
+python3 -m py_compile \
+  build_seqlet_annotation.py \
+  count_leftover_seqlets.py \
+  seqlet_viz.py \
+  tests/test_build_seqlet_annotation.py \
+  tests/test_count_leftover_seqlets.py
+```
+
+These lightweight checks also passed without the scientific dependencies:
+
+```bash
+python3 count_leftover_seqlets.py --help
+python3 seqlet_viz.py --help
+python3 -c 'from count_leftover_seqlets import estimate_clustering_entrants; assert estimate_clustering_entrants(418064,60823,100000)==160823'
 ```
 
 Full pytest execution is pending until the development dependencies are
-installed in an environment with `h5py`, `pandas`, `pyfaidx`, and `pytest`.
+installed in an environment with `h5py`, `pandas`, `pyfaidx`, `umap-learn`,
+`matplotlib`, and `pytest`.

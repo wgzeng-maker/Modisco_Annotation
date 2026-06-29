@@ -36,6 +36,70 @@ python -m pytest
 use compressed HDF5 filters. The small synthetic tests do not require compressed
 HDF5.
 
+The seqlet-counting script additionally requires `modiscolite`, so run it in
+the same ChromBPNet/MoDISco environment or Docker image used to generate the
+MoDISco output.
+
+### Back-annotation
+
+```bash
+python build_seqlet_annotation.py \
+  --modisco GC_modisco_profile_v2.h5 \
+  --bed GC_mm10.interpreted_regions.bed \
+  --output GC_profile_seqlet_annotation \
+  --window 1000 \
+  --input-len 2114 \
+  --genome mm10.fa
+```
+
+### Seqlet-count funnel
+
+```bash
+python count_leftover_seqlets.py \
+  --scores GC_mm10.profile_scores.h5 \
+  --modisco GC_modisco_profile_v2.h5 \
+  --window 1000 \
+  -n 100000
+```
+
+This reports candidate seqlets, positive/negative threshold survivors, an
+estimated upper bound on clustering input after the `-n` cap, and seqlets saved
+in final patterns. It does not rerun clustering.
+
+### Seqlet visualization
+
+```bash
+# Atlas across all parent patterns. Keep the cap low on laptops.
+python seqlet_viz.py atlas \
+  --modisco GC_modisco_profile_v2.h5 \
+  --per-pattern-cap 75 \
+  --output umap_all_patterns.png
+
+# Subpatterns inside one parent pattern.
+python seqlet_viz.py subpattern \
+  --modisco GC_modisco_profile_v2.h5 \
+  --arm pos_patterns \
+  --pattern pattern_0 \
+  --max-seqlets 3000 \
+  --output umap_pattern0_subpatterns.png
+
+# Sequence-vs-attribution UMAP panels.
+python seqlet_viz.py design1 \
+  --modisco GC_modisco_profile_v2.h5 \
+  --pattern pattern_0 \
+  --output design1_pattern0.png
+
+# Interpretable center-similarity scatter.
+python seqlet_viz.py design2 \
+  --modisco GC_modisco_profile_v2.h5 \
+  --pattern pattern_0 \
+  --output design2_pattern0.png
+```
+
+The UMAP visualizations use a pairwise Continuous Jaccard matrix, so memory and
+time scale as O(N²). Reduce `--max-seqlets` or `--per-pattern-cap` before
+running large plots locally.
+
 ## Visualizing the clusters
 
 Each point is one seqlet. Seqlets are embedded by similarity, so points that sit close together are alike.
