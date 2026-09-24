@@ -1,29 +1,30 @@
-# Modisco_ClusterAnalysis
+# Modisco_Annotation
 
-A downstream analysis pipeline built on Jacob Schreiber's [Modisco-lite](https://github.com/jmschrei/tfmodisco-lite).
+A research toolkit for back-annotating and exploring seqlets from [TF-MoDISco-lite](https://github.com/jmschrei/tfmodisco-lite).
 
-Modisco-lite groups seqlets into clusters (called **Patterns**) and matches each one to a known motif from the public motif database JASPAR. It also splits each Pattern into sub-clusters (called **Subpatterns**). This repository analyzes and visualizes the heterogeneity within these Patterns and Subpatterns.
+The scripts map clustered seqlets back to genome coordinates, compare sequence and attribution within patterns and subpatterns, account for seqlets retained through the discovery workflow, and generate portable motif reports.
 
-## Current development status
+## Start here
 
-This repository is still in research-toolkit form. The first tested command is
-the back-annotation script, which maps clustered MoDISco seqlets back to genome
-coordinates:
+| Task | Entry point |
+|---|---|
+| Map clustered seqlets to genome coordinates | [build_seqlet_annotation.py](build_seqlet_annotation.py) |
+| Account for candidate and retained seqlets | [count_leftover_seqlets.py](count_leftover_seqlets.py) |
+| Explore pattern and subpattern heterogeneity | [seqlet_viz.py](seqlet_viz.py) |
+| Create a standalone motif report | [upgrade_modisco_report.py](upgrade_modisco_report.py) |
+| Inspect existing checks | [tests/](tests/) |
+
+For a quick visual overview, see [Visualizing the clusters](#visualizing-the-clusters).
+For interpretation, see [seqlet retention limits](#limitation-most-identified-seqlets-never-enter-clustering).
+Commands below use the original example filenames; supply the matching files from your own MoDISco run.
+
+## Status and setup
+
+This repository is still in research-toolkit form. The first tested command documented in the original README is back-annotation.
 
 ```bash
-python build_seqlet_annotation.py \
-  --modisco GC_modisco_profile_v2.h5 \
-  --bed GC_mm10.interpreted_regions.bed \
-  --output GC_profile_seqlet_annotation \
-  --window 1000 \
-  --input-len 2114 \
-  --genome mm10.fa
+python -m pip install -r requirements.txt
 ```
-
-Coordinates are BED-style: 0-based, half-open intervals. When `--genome` is
-provided, the script samples seqlets across patterns/subpatterns/strands and
-checks the stored seqlet sequence against the reference FASTA before writing the
-annotation table.
 
 For local development:
 
@@ -32,15 +33,15 @@ python -m pip install -r requirements-dev.txt
 python -m pytest
 ```
 
-`hdf5plugin` is required for many production MoDISco HDF5 files because they may
-use compressed HDF5 filters. The small synthetic tests do not require compressed
-HDF5.
+`hdf5plugin` is required for many production MoDISco HDF5 files because they may use compressed HDF5 filters. The small synthetic tests do not require compressed HDF5.
 
-The seqlet-counting script additionally requires `modiscolite`, so run it in
-the same ChromBPNet/MoDISco environment or Docker image used to generate the
-MoDISco output.
+The seqlet-counting script additionally requires `modiscolite`, so run it in the same ChromBPNet/MoDISco environment or Docker image used to generate the MoDISco output.
+
+## Usage
 
 ### Back-annotation
+
+Coordinates are BED-style: 0-based, half-open intervals. With `--genome`, the script samples seqlets across patterns, subpatterns, and strands and checks stored sequences against the reference FASTA before writing the annotation table.
 
 ```bash
 python build_seqlet_annotation.py \
