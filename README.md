@@ -1,29 +1,30 @@
-# Modisco_ClusterAnalysis
+# Modisco_Annotation
 
-A downstream analysis pipeline built on Jacob Schreiber's [Modisco-lite](https://github.com/jmschrei/tfmodisco-lite).
+Scripts for mapping and analyzing seqlets from [TF-MoDISco-lite](https://github.com/jmschrei/tfmodisco-lite).
 
-Modisco-lite groups seqlets into clusters (called **Patterns**) and matches each one to a known motif from the public motif database JASPAR. It also splits each Pattern into sub-clusters (called **Subpatterns**). This repository analyzes and visualizes the heterogeneity within these Patterns and Subpatterns.
+The scripts map clustered seqlets back to genome coordinates, compare sequence and attribution within patterns and subpatterns, count how many seqlets are retained at each stage, and export motif reports as PDF or self-contained HTML.
 
-## Current development status
+## Start here
 
-This repository is still in research-toolkit form. The first tested command is
-the back-annotation script, which maps clustered MoDISco seqlets back to genome
-coordinates:
+| Task | Script |
+|---|---|
+| Map clustered seqlets to genome coordinates | [build_seqlet_annotation.py](build_seqlet_annotation.py) |
+| Count candidate and retained seqlets | [count_leftover_seqlets.py](count_leftover_seqlets.py) |
+| Explore pattern and subpattern heterogeneity | [seqlet_viz.py](seqlet_viz.py) |
+| Create a standalone motif report | [upgrade_modisco_report.py](upgrade_modisco_report.py) |
+| Run tests | [tests/](tests/) |
+
+For example plots, see [Visualizing the clusters](#visualizing-the-clusters).
+For interpretation, see [seqlet retention limits](#limitation-most-identified-seqlets-never-enter-clustering).
+Replace the example filenames below with the corresponding files from your MoDISco run.
+
+## Status and setup
+
+This is a collection of research scripts. Back-annotation was the first command tested.
 
 ```bash
-python build_seqlet_annotation.py \
-  --modisco GC_modisco_profile_v2.h5 \
-  --bed GC_mm10.interpreted_regions.bed \
-  --output GC_profile_seqlet_annotation \
-  --window 1000 \
-  --input-len 2114 \
-  --genome mm10.fa
+python -m pip install -r requirements.txt
 ```
-
-Coordinates are BED-style: 0-based, half-open intervals. When `--genome` is
-provided, the script samples seqlets across patterns/subpatterns/strands and
-checks the stored seqlet sequence against the reference FASTA before writing the
-annotation table.
 
 For local development:
 
@@ -32,15 +33,15 @@ python -m pip install -r requirements-dev.txt
 python -m pytest
 ```
 
-`hdf5plugin` is required for many production MoDISco HDF5 files because they may
-use compressed HDF5 filters. The small synthetic tests do not require compressed
-HDF5.
+`hdf5plugin` is required for many production MoDISco HDF5 files because they may use compressed HDF5 filters. The small synthetic tests do not require compressed HDF5.
 
-The seqlet-counting script additionally requires `modiscolite`, so run it in
-the same ChromBPNet/MoDISco environment or Docker image used to generate the
-MoDISco output.
+The seqlet-counting script additionally requires `modiscolite`, so run it in the same ChromBPNet/MoDISco environment or Docker image used to generate the MoDISco output.
+
+## Usage
 
 ### Back-annotation
+
+Coordinates are BED-style: 0-based, half-open intervals. With `--genome`, the script samples seqlets across patterns, subpatterns, and strands and checks stored sequences against the reference FASTA before writing the annotation table.
 
 ```bash
 python build_seqlet_annotation.py \
@@ -226,9 +227,7 @@ four regions.
 
 ## Limitation: most identified seqlets never enter clustering
 
-A key limitation worth understanding before interpreting any MoDISco pattern set
-— **the patterns are built from only a fraction of the seqlets MoDISco actually
-identifies.**
+MoDISco builds patterns from only a fraction of the seqlets it identifies.
 
 ### What happens
 
@@ -287,7 +286,7 @@ ChromBPNet profile-head run (mouse cerebellar granule cells, 158,710 peaks,
 
 ### Where seqlets are lost
 
-Two separate bottlenecks, often confused:
+Seqlets are removed at two stages:
 
 **1. The metacluster cap (the largest loss).**
 Each metacluster is capped at `-n` (here 100,000). The positive metacluster had
@@ -311,7 +310,7 @@ formed or joined a clean motif. Their individual counts are **not saved** by
 MoDISco, so only the combined ~98,000 is measurable; the per-cause breakdown
 would require re-running clustering with added logging.
 
-### Bottom line
+### Interpretation
 
 Of 478,887 confidently-important candidate seqlets, only 62,767 (~13%) end up in
 final patterns. The loss is dominated by the metacluster cap (a tractability
@@ -319,23 +318,17 @@ limit, not a biological one) and clustering-stage quality filters. **MoDISco
 patterns therefore describe the strongest, cleanest, most common motifs — not
 the full set of important sequence in the genome.**
 
-### Why this matters
+### Weaker signals
 
 The ~3 candidate seqlets per region are a mix of real motif instances and
-weaker-importance windows. Much of what is dropped past the cap is genuinely
-lower-signal — **but not all of it.** Among the hundreds of thousands of
-sub-cap-strength seqlets there are very likely *real but weaker* regulatory
-elements — rarer motifs, weaker binding sites, cell-type-specific grammar with
-modest attribution — discarded simply for not being in the top 100,000 by
-strength.
-
-In other words: **MoDISco patterns describe the strongest, most common motifs
-well, but say little about the long tail of weaker signal.**
+weaker-importance windows. Seqlets below the cap have lower attribution scores, but some may still represent
+regulatory elements, such as rarer motifs or weaker binding sites. These are
+excluded because they fall outside the top 100,000 by attribution strength.
 
 ### Future direction
 
-A robust method is needed to analyze the left-over seqlets — those that pass the
-importance threshold but never enter clustering. Possible directions:
+Seqlets that pass the importance threshold but never enter clustering need
+further analysis. Possible approaches include:
 
 - cluster the discarded seqlets separately, in batches, rather than capping;
 - match weak seqlets against the *strong* patterns already found, to rescue weak
